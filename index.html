@@ -195,10 +195,47 @@
         .toast.bad { border-left: 4px solid var(--down); }
         @keyframes slideIn { from { transform:translateX(120%); opacity:0; } to { transform:translateX(0); opacity:1; } }
 
+        /* CHART */
+        .chart-wrap { position: relative; width: 100%; height: 280px; }
+        .chart-wrap canvas { width: 100%; height: 100%; border-radius: 10px; }
+        .btc-live-price {
+            display: flex;
+            align-items: baseline;
+            gap: 0.6rem;
+            margin-bottom: 0.8rem;
+        }
+        .btc-live-price .label { color: var(--muted); font-size: 0.9rem; font-weight: 600; }
+        .btc-live-price .value {
+            font-family: 'Outfit'; font-size: 1.8rem; font-weight: 900; color: #fff;
+            text-shadow: 0 0 15px rgba(255,255,255,0.15);
+        }
+        .btc-live-price .delta { font-size: 0.9rem; font-weight: 700; }
+        .btc-live-price .delta.pos { color: var(--up); }
+        .btc-live-price .delta.neg { color: var(--down); }
+        .chart-legend {
+            display: flex;
+            gap: 1.2rem;
+            margin-top: 0.5rem;
+            font-size: 0.75rem;
+            color: var(--muted);
+        }
+        .chart-legend span::before {
+            content: '';
+            display: inline-block;
+            width: 14px;
+            height: 3px;
+            margin-right: 5px;
+            vertical-align: middle;
+            border-radius: 2px;
+        }
+        .chart-legend .leg-price::before { background: #818cf8; }
+        .chart-legend .leg-strike::before { background: #f59e0b; border-style: dashed; }
+
         @media(max-width:600px) {
             .trade-grid { grid-template-columns: 1fr; }
             .price-big { font-size: 2.2rem; }
             .bal b { font-size: 1.6rem; }
+            .chart-wrap { height: 200px; }
         }
     </style>
 </head>
@@ -210,6 +247,23 @@
 </header>
 
 <div class="container">
+
+    <!-- BTC CHART -->
+    <div class="card">
+        <h3>📉 Bitcoin en Tiempo Real</h3>
+        <div class="btc-live-price">
+            <span class="label">BTC/USD</span>
+            <span class="value" id="btcPrice">--</span>
+            <span class="delta" id="btcDelta">--</span>
+        </div>
+        <div class="chart-wrap">
+            <canvas id="chart"></canvas>
+        </div>
+        <div class="chart-legend">
+            <span class="leg-price">Precio BTC</span>
+            <span class="leg-strike">Precio inicio (strike)</span>
+        </div>
+    </div>
 
     <!-- MARKET CARD -->
     <div class="card">
@@ -266,11 +320,17 @@
 <script>
 // ====== STATE ======
 let balance = 1000;
-let positions = []; // {marketId, question, outcome, shares, investment, upToken, downToken, settled}
+let positions = [];
 let history = [];
 let curMarket = null;
+let curMarketId = null;
 let prices = {Up: 0, Down: 0};
 let tokens = {Up: null, Down: null};
+
+// Chart state
+let chartData = [];       // [{time, price}]
+let strikePrice = null;   // BTC price at start of 5-min window
+const MAX_CHART_POINTS = 300; // 5 min of 1s data
 
 // Restore
 try {
@@ -543,11 +603,190 @@ setInterval(() => {
 // Update investment return calculation on input change
 document.getElementById('amt').addEventListener('input', renderUI);
 
+// ====== BTC CHART ======
+const canvas = document.getElementById('chart');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas() {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width * (window.devicePixelRatio || 1);
+    canvas.height = rect.height * (window.devicePixelRatio || 1);
+    ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+function drawChart() {
+    const W = canvas.width / (window.devicePixelRatio || 1);
+    const H = canvas.height / (window.devicePixelRatio || 1);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if(chartData.length < 2) {
+        ctx.fillStyle = '#6b7280';
+        ctx.font = '14px Inter';
+        ctx.textAlign = 'center';
+        ctx.fillText('Esperando datos de precio...', W/2, H/2);
+        return;
+    }
+
+    const ps = chartData.map(d => d.price);
+    let minP = Math.min(...ps);
+    let maxP = Math.max(...ps);
+    if(strikePrice !== null) {
+        minP = Math.min(minP, strikePrice);
+        maxP = Math.max(maxP, strikePrice);
+    }
+    const pad = (maxP - minP) * 0.15 || 5;
+    minP -= pad;
+    maxP += pad;
+
+    const marginL = 70;
+    const marginR = 15;
+    const marginT = 10;
+    const marginB = 25;
+    const cW = W - marginL - marginR;
+    const cH = H - marginT - marginB;
+
+    const xScale = (i) => marginL + (i / (chartData.length - 1)) * cW;
+    const yScale = (p) => marginT + ((maxP - p) / (maxP - minP)) * cH;
+
+    // Grid lines
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 1;
+    const gridCount = 5;
+    for(let i = 0; i <= gridCount; i++) {
+        const y = marginT + (i / gridCount) * cH;
+        ctx.beginPath();
+        ctx.moveTo(marginL, y);
+        ctx.lineTo(W - marginR, y);
+        ctx.stroke();
+        // Price label
+        const pVal = maxP - (i / gridCount) * (maxP - minP);
+        ctx.fillStyle = '#6b7280';
+        ctx.font = '11px Inter';
+        ctx.textAlign = 'right';
+        ctx.fillText('$' + pVal.toFixed(0), marginL - 8, y + 4);
+    }
+
+    // Strike line
+    if(strikePrice !== null) {
+        const sy = yScale(strikePrice);
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(marginL, sy);
+        ctx.lineTo(W - marginR, sy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Label
+        ctx.fillStyle = '#f59e0b';
+        ctx.font = 'bold 11px Inter';
+        ctx.textAlign = 'left';
+        ctx.fillText('Strike $' + strikePrice.toFixed(0), marginL + 5, sy - 6);
+    }
+
+    // Price line
+    const lastPrice = chartData[chartData.length - 1].price;
+    const aboveStrike = strikePrice === null || lastPrice >= strikePrice;
+    const lineColor = aboveStrike ? '#00d287' : '#ff3b69';
+
+    // Gradient fill
+    const grad = ctx.createLinearGradient(0, marginT, 0, H - marginB);
+    if(aboveStrike) {
+        grad.addColorStop(0, 'rgba(0,210,135,0.15)');
+        grad.addColorStop(1, 'rgba(0,210,135,0)');
+    } else {
+        grad.addColorStop(0, 'rgba(255,59,105,0)');
+        grad.addColorStop(1, 'rgba(255,59,105,0.15)');
+    }
+
+    // Fill area
+    ctx.beginPath();
+    ctx.moveTo(xScale(0), H - marginB);
+    for(let i = 0; i < chartData.length; i++) {
+        ctx.lineTo(xScale(i), yScale(chartData[i].price));
+    }
+    ctx.lineTo(xScale(chartData.length - 1), H - marginB);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Line
+    ctx.beginPath();
+    for(let i = 0; i < chartData.length; i++) {
+        const x = xScale(i);
+        const y = yScale(chartData[i].price);
+        if(i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+
+    // Dot at end
+    const lastX = xScale(chartData.length - 1);
+    const lastY = yScale(lastPrice);
+    ctx.beginPath();
+    ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
+    ctx.fillStyle = lineColor;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(lastX, lastY, 8, 0, Math.PI * 2);
+    ctx.fillStyle = lineColor.replace(')', ',0.2)');
+    ctx.fill();
+
+    // Current price label at right
+    ctx.fillStyle = lineColor;
+    ctx.font = 'bold 12px Outfit';
+    ctx.textAlign = 'left';
+    ctx.fillText('$' + lastPrice.toFixed(2), lastX + 12, lastY + 4);
+}
+
+async function fetchBTCPrice() {
+    try {
+        const resp = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');
+        const data = await resp.json();
+        const price = parseFloat(data.price);
+        if(isNaN(price)) return;
+
+        // Update display
+        document.getElementById('btcPrice').textContent = '$' + price.toFixed(2);
+        const deltaEl = document.getElementById('btcDelta');
+        if(strikePrice !== null) {
+            const diff = price - strikePrice;
+            const pct = ((diff / strikePrice) * 100).toFixed(3);
+            deltaEl.textContent = `${diff >= 0 ? '+' : ''}$${diff.toFixed(2)} (${diff >= 0 ? '+' : ''}${pct}%)`;
+            deltaEl.className = 'delta ' + (diff >= 0 ? 'pos' : 'neg');
+        } else {
+            deltaEl.textContent = '';
+        }
+
+        // If new market detected, set strike price
+        if(curMarket && curMarket.id !== curMarketId) {
+            strikePrice = price;
+            curMarketId = curMarket.id;
+            chartData = [];
+            log(`Strike price fijado: $${price.toFixed(2)} para ${curMarket.question}`);
+        }
+
+        chartData.push({time: Date.now(), price});
+        if(chartData.length > MAX_CHART_POINTS) chartData.shift();
+
+        drawChart();
+    } catch(e) {
+        // Binance API might fail silently, no big deal
+    }
+}
+
 // Start
 log('Bot iniciado. Buscando mercados...');
 renderUI();
 tick();
 setInterval(tick, 1000);
+fetchBTCPrice();
+setInterval(fetchBTCPrice, 1000);
 </script>
 </body>
 </html>
