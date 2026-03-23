@@ -84,6 +84,16 @@ http://localhost:8000
 - **`server.py`** — Servidor local Python que sirve el HTML y actúa como proxy para las APIs de Polymarket (necesario para evitar restricciones CORS del navegador).
 - **`index.html`** — Interfaz completa con toda la lógica de trading, estado y visualización.
 
+## ☁️ Deploy en Vercel
+
+También puedes desplegarlo en [Vercel](https://vercel.com) para acceder desde cualquier lugar:
+
+1. Haz fork o sube este repo a tu GitHub.
+2. Ve a [vercel.com](https://vercel.com) y crea un nuevo proyecto conectando tu repo.
+3. ¡Listo! Vercel usará el `vercel.json` incluido para redirigir las peticiones de API automáticamente.
+
+> **Nota:** En Vercel no necesitas `server.py`. El archivo `vercel.json` configura las redirecciones (rewrites) a las APIs de Polymarket directamente desde el edge de Vercel.
+
 ## ⚠️ Disclaimer
 
 Este proyecto es **únicamente para fines educativos y de simulación**. No se realizan transacciones reales. No inviertas dinero real basándote en los resultados de este simulador.
