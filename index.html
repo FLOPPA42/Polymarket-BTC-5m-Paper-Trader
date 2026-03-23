@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polymarket BTC 5m Paper Trader</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@500;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0d13;
+            --glass: rgba(18, 22, 32, 0.7);
+            --glass-border: rgba(255,255,255,0.07);
+            --up: #00d287;
+            --down: #ff3b69;
+            --text: #eef0f6;
+            --muted: #6b7280;
+            --glow-up: rgba(0,210,135,0.25);
+            --glow-down: rgba(255,59,105,0.25);
+            --accent: #818cf8;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            background: var(--bg);
+            background-image:
+                radial-gradient(ellipse at 20% 50%, rgba(0,210,135,0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 30%, rgba(255,59,105,0.06) 0%, transparent 50%);
+            font-family: 'Inter', sans-serif;
+            color: var(--text);
+            min-height: 100vh;
+        }
+        header {
+            text-align: center;
+            padding: 2rem 1rem 1.5rem;
+            border-bottom: 1px solid var(--glass-border);
+            background: linear-gradient(180deg, rgba(18,22,32,0.9), transparent);
+            backdrop-filter: blur(12px);
+        }
+        h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, #fff 30%, var(--accent));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .bal { margin-top: 0.5rem; color: var(--muted); font-size: 0.95rem; }
+        .bal b {
+            font-size: 2.2rem;
+            color: #fff;
+            font-family: 'Outfit', sans-serif;
+            text-shadow: 0 0 20px rgba(255,255,255,0.15);
+        }
+        .container { max-width: 960px; margin: 1.5rem auto; padding: 0 1rem; }
+        .card {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            margin-bottom: 1.5rem;
+        }
+
+        /* STATUS BAR */
+        .status-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 0.35rem 0.85rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .pill.live { background: rgba(0,210,135,0.15); color: var(--up); }
+        .pill.live::before { content:''; width:8px; height:8px; border-radius:50%; background:var(--up); animation:blink 1.2s infinite; }
+        .pill.waiting { background: rgba(245,158,11,0.15); color: #f59e0b; }
+        .pill.error { background: rgba(255,59,105,0.15); color: var(--down); }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+        .market-q {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.15rem;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+        .timer { font-size: 0.8rem; color: var(--muted); }
+
+        /* TRADING GRID */
+        .trade-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+        .trade-side {
+            text-align: center;
+            padding: 1.2rem;
+            border-radius: 14px;
+            background: rgba(0,0,0,0.25);
+            border: 1px solid rgba(255,255,255,0.04);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .trade-side:hover { transform: translateY(-3px); }
+        .trade-side.up-side { border-bottom: 3px solid var(--up); }
+        .trade-side.down-side { border-bottom: 3px solid var(--down); }
+        .side-label { font-weight: 700; font-size: 0.85rem; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 0.3rem; }
+        .price-big {
+            font-family: 'Outfit', sans-serif;
+            font-size: 3rem;
+            font-weight: 900;
+            margin: 0.5rem 0;
+        }
+        .up-side .price-big { color: var(--up); text-shadow: 0 0 20px var(--glow-up); }
+        .down-side .price-big { color: var(--down); text-shadow: 0 0 20px var(--glow-down); }
+        .potential { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.8rem; }
+        .potential span { color: #fff; font-weight: 600; }
+        .btn {
+            width: 100%;
+            padding: 0.9rem;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            transition: all 0.15s;
+        }
+        .btn:active:not(:disabled) { transform: scale(0.97); }
+        .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+        .btn-up { background: var(--up); color: #0a0d13; box-shadow: 0 0 15px var(--glow-up); }
+        .btn-up:hover:not(:disabled) { box-shadow: 0 0 30px var(--glow-up); }
+        .btn-down { background: var(--down); color: #fff; box-shadow: 0 0 15px var(--glow-down); }
+        .btn-down:hover:not(:disabled) { box-shadow: 0 0 30px var(--glow-down); }
+
+        /* INVEST INPUT */
+        .invest-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.8rem;
+            margin-bottom: 1.2rem;
+        }
+        .invest-row label { color: var(--muted); font-weight: 600; font-size: 0.9rem; }
+        .invest-row input {
+            background: rgba(0,0,0,0.4);
+            border: 1px solid var(--glass-border);
+            color: #fff;
+            padding: 0.6rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            width: 110px;
+            text-align: center;
+            font-family: 'Outfit';
+        }
+        .invest-row input:focus { outline: none; border-color: var(--accent); }
+
+        /* TABLES */
+        table { width: 100%; border-collapse: collapse; }
+        th { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; text-align: left; padding: 0.6rem; }
+        td { padding: 0.7rem 0.6rem; border-top: 1px solid rgba(255,255,255,0.04); font-size: 0.9rem; }
+        .empty-row { text-align: center; color: var(--muted); }
+        h3 { font-family: 'Outfit'; font-size: 1.1rem; margin-bottom: 0.8rem; }
+
+        /* DEBUG LOG */
+        #debug-log {
+            background: rgba(0,0,0,0.5);
+            border-radius: 8px;
+            padding: 0.8rem;
+            font-family: monospace;
+            font-size: 0.75rem;
+            color: var(--muted);
+            max-height: 150px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        /* TOASTS */
+        .toast-box { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 999; }
+        .toast {
+            background: rgba(18,22,32,0.95);
+            border: 1px solid var(--glass-border);
+            padding: 0.8rem 1.2rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+            backdrop-filter: blur(10px);
+            animation: slideIn 0.3s ease forwards;
+            font-size: 0.9rem;
+        }
+        .toast.ok { border-left: 4px solid var(--up); }
+        .toast.bad { border-left: 4px solid var(--down); }
+        @keyframes slideIn { from { transform:translateX(120%); opacity:0; } to { transform:translateX(0); opacity:1; } }
+
+        @media(max-width:600px) {
+            .trade-grid { grid-template-columns: 1fr; }
+            .price-big { font-size: 2.2rem; }
+            .bal b { font-size: 1.6rem; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>⚡ Polymarket BTC 5m Paper Trader</h1>
+    <div class="bal">Saldo: <b>$<span id="bal">1000.00</span></b></div>
+</header>
+
+<div class="container">
+
+    <!-- MARKET CARD -->
+    <div class="card">
+        <div class="status-bar">
+            <div class="pill waiting" id="pill">Conectando...</div>
+            <div class="timer" id="timer">--</div>
+        </div>
+        <div class="market-q" id="mq">Buscando mercado activo...</div>
+
+        <div class="invest-row">
+            <label>Inversión $</label>
+            <input type="number" id="amt" value="100" min="1" step="10">
+        </div>
+
+        <div class="trade-grid">
+            <div class="trade-side up-side">
+                <div class="side-label">📈 UP</div>
+                <div class="price-big" id="pUp">--</div>
+                <div class="potential">Retorno: <span id="rUp">--</span></div>
+                <button class="btn btn-up" id="bUp" disabled onclick="buy('Up')">COMPRAR UP</button>
+            </div>
+            <div class="trade-side down-side">
+                <div class="side-label">📉 DOWN</div>
+                <div class="price-big" id="pDown">--</div>
+                <div class="potential">Retorno: <span id="rDown">--</span></div>
+                <button class="btn btn-down" id="bDown" disabled onclick="buy('Down')">COMPRAR DOWN</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- POSITIONS -->
+    <div class="card">
+        <h3>📊 Posiciones Activas</h3>
+        <table><thead><tr><th>Mercado</th><th>Dirección</th><th>Acciones</th><th>Inversión</th></tr></thead>
+        <tbody id="pos"></tbody></table>
+    </div>
+
+    <!-- HISTORY -->
+    <div class="card">
+        <h3>📜 Historial</h3>
+        <table><thead><tr><th>Mercado</th><th>Dirección</th><th>Resultado</th><th>PnL</th></tr></thead>
+        <tbody id="hist"></tbody></table>
+    </div>
+
+    <!-- DEBUG -->
+    <div class="card">
+        <h3>🔧 Log de Debug</h3>
+        <div id="debug-log">Iniciando...</div>
+    </div>
+</div>
+
+<div class="toast-box" id="toasts"></div>
+
+<script>
+// ====== STATE ======
+let balance = 1000;
+let positions = []; // {marketId, question, outcome, shares, investment, upToken, downToken, settled}
+let history = [];
+let curMarket = null;
+let prices = {Up: 0, Down: 0};
+let tokens = {Up: null, Down: null};
+
+// Restore
+try {
+    if(localStorage.pm_bal) balance = parseFloat(localStorage.pm_bal);
+    if(localStorage.pm_pos) positions = JSON.parse(localStorage.pm_pos);
+    if(localStorage.pm_hist) history = JSON.parse(localStorage.pm_hist);
+} catch(e) {}
+
+function save() {
+    localStorage.pm_bal = balance;
+    localStorage.pm_pos = JSON.stringify(positions);
+    localStorage.pm_hist = JSON.stringify(history);
+}
+
+function log(msg) {
+    const el = document.getElementById('debug-log');
+    const t = new Date().toLocaleTimeString();
+    el.textContent += `\n[${t}] ${msg}`;
+    el.scrollTop = el.scrollHeight;
+}
+
+function toast(msg, ok=true) {
+    const c = document.getElementById('toasts');
+    const d = document.createElement('div');
+    d.className = 'toast ' + (ok ? 'ok' : 'bad');
+    d.textContent = msg;
+    c.appendChild(d);
+    setTimeout(() => { d.style.opacity = '0'; setTimeout(() => d.remove(), 300); }, 4000);
+}
+
+function renderUI() {
+    document.getElementById('bal').textContent = balance.toFixed(2);
+    const amt = parseFloat(document.getElementById('amt').value) || 100;
+
+    // Prices
+    if(prices.Up > 0) {
+        document.getElementById('pUp').textContent = prices.Up.toFixed(2);
+        document.getElementById('rUp').textContent = '$' + (amt / prices.Up).toFixed(2);
+        document.getElementById('bUp').disabled = false;
+    } else {
+        document.getElementById('pUp').textContent = '--';
+        document.getElementById('rUp').textContent = '--';
+        document.getElementById('bUp').disabled = true;
+    }
+    if(prices.Down > 0) {
+        document.getElementById('pDown').textContent = prices.Down.toFixed(2);
+        document.getElementById('rDown').textContent = '$' + (amt / prices.Down).toFixed(2);
+        document.getElementById('bDown').disabled = false;
+    } else {
+        document.getElementById('pDown').textContent = '--';
+        document.getElementById('rDown').textContent = '--';
+        document.getElementById('bDown').disabled = true;
+    }
+
+    // Positions
+    const pb = document.getElementById('pos');
+    const active = positions.filter(p => !p.settled);
+    if(active.length === 0) {
+        pb.innerHTML = '<tr><td colspan="4" class="empty-row">Sin posiciones</td></tr>';
+    } else {
+        pb.innerHTML = active.map(p => {
+            const c = p.outcome === 'Up' ? 'var(--up)' : 'var(--down)';
+            return `<tr><td>${p.question}</td><td style="color:${c};font-weight:700">${p.outcome}</td><td>${p.shares.toFixed(2)}</td><td>$${p.investment.toFixed(2)}</td></tr>`;
+        }).join('');
+    }
+
+    // History
+    const hb = document.getElementById('hist');
+    if(history.length === 0) {
+        hb.innerHTML = '<tr><td colspan="4" class="empty-row">Aún no hay historial</td></tr>';
+    } else {
+        hb.innerHTML = [...history].reverse().slice(0,15).map(h => {
+            const dc = h.outcome === 'Up' ? 'var(--up)' : 'var(--down)';
+            const pc = h.pnl >= 0 ? 'var(--up)' : 'var(--down)';
+            return `<tr><td>${h.question}</td><td style="color:${dc}">${h.outcome}</td><td>${h.win ? '✅ Ganado' : '❌ Perdido'}</td><td style="color:${pc};font-weight:700">${h.pnl >= 0 ? '+' : ''}$${h.pnl.toFixed(2)}</td></tr>`;
+        }).join('');
+    }
+    save();
+}
+
+// ====== API ======
+async function api(path) {
+    const resp = await fetch(path);
+    if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return await resp.json();
+}
+
+async function findMarket() {
+    const now = Math.floor(Date.now() / 1000);
+    const bucket = Math.floor(now / 300) * 300;
+    const offsets = [0, 300, -300, 600];
+
+    for(const off of offsets) {
+        const slug = `btc-updown-5m-${bucket + off}`;
+        try {
+            const data = await api(`/api/gamma/events?slug=${slug}`);
+            if(data && data.length > 0) {
+                const evt = data[0];
+                const mkts = evt.markets || [];
+                for(const m of mkts) {
+                    if(m.active && !m.closed && m.acceptingOrders) {
+                        log(`Mercado encontrado: ${m.question} (slug: ${slug})`);
+                        return m;
+                    }
+                }
+            }
+        } catch(e) {
+            log(`Error buscando ${slug}: ${e.message}`);
+        }
+    }
+    return null;
+}
+
+async function getBook(tokenId) {
+    try {
+        return await api(`/api/clob/book?token_id=${tokenId}`);
+    } catch(e) {
+        log(`Error orderbook: ${e.message}`);
+        return null;
+    }
+}
+
+async function checkSettlements() {
+    const active = positions.filter(p => !p.settled);
+    for(const pos of active) {
+        try {
+            const m = await api(`/api/gamma/markets/${pos.marketId}`);
+            if(!m || !m.closed) continue;
+
+            let op = [];
+            try { op = JSON.parse(m.outcomePrices || '[]'); } catch(e){}
+
+            const hasWinner = op.some(p => parseFloat(p) === 1.0);
+            if(!hasWinner) { log(`Mercado ${pos.marketId} cerrado, esperando resolución...`); continue; }
+
+            const outcomes = JSON.parse(m.outcomes || '[]');
+            const winIdx = op.findIndex(p => parseFloat(p) === 1.0);
+            const winner = outcomes[winIdx];
+
+            pos.settled = true;
+            if(pos.outcome === winner) {
+                const payout = pos.shares;
+                const pnl = payout - pos.investment;
+                balance += payout;
+                history.push({question: pos.question, outcome: pos.outcome, win: true, pnl});
+                toast(`¡Ganaste! ${pos.outcome} correcto. +$${pnl.toFixed(2)}`);
+                log(`WIN: ${pos.question} -> ${winner}. PnL: +$${pnl.toFixed(2)}`);
+            } else {
+                history.push({question: pos.question, outcome: pos.outcome, win: false, pnl: -pos.investment});
+                toast(`Perdiste en ${pos.question}`, false);
+                log(`LOSS: ${pos.question} -> ${winner}. PnL: -$${pos.investment.toFixed(2)}`);
+            }
+        } catch(e) {
+            log(`Error checking settlement: ${e.message}`);
+        }
+    }
+}
+
+// ====== TRADING ======
+function buy(outcome) {
+    const amt = parseFloat(document.getElementById('amt').value);
+    if(!amt || amt <= 0) return toast('Monto inválido', false);
+    if(amt > balance) return toast('Saldo insuficiente', false);
+    if(!curMarket) return toast('No hay mercado activo', false);
+
+    const price = prices[outcome];
+    if(price <= 0 || price >= 1) return toast('Precio no disponible', false);
+
+    const shares = amt / price;
+    balance -= amt;
+
+    positions.push({
+        marketId: curMarket.id,
+        question: curMarket.question,
+        outcome,
+        shares,
+        investment: amt,
+        settled: false
+    });
+
+    log(`COMPRA: ${shares.toFixed(2)} acciones ${outcome} @ $${price} = $${amt}`);
+    toast(`Compraste ${shares.toFixed(2)} acciones de ${outcome} a $${price}`);
+    renderUI();
+}
+
+// ====== MAIN LOOP ======
+let countdown = 0;
+async function tick() {
+    const pill = document.getElementById('pill');
+    const mq = document.getElementById('mq');
+
+    try {
+        // Check old positions
+        await checkSettlements();
+
+        // Find market
+        const m = await findMarket();
+
+        if(m) {
+            curMarket = m;
+            pill.className = 'pill live';
+            pill.textContent = 'EN VIVO';
+            mq.textContent = m.question;
+
+            // Parse tokens
+            const outs = JSON.parse(m.outcomes || '[]');
+            const toks = JSON.parse(m.clobTokenIds || '[]');
+            const upIdx = outs.indexOf('Up');
+            const downIdx = outs.indexOf('Down');
+            tokens.Up = toks[upIdx];
+            tokens.Down = toks[downIdx];
+
+            // Fetch orderbooks
+            const obUp = await getBook(tokens.Up);
+            const obDown = await getBook(tokens.Down);
+
+            prices.Up = 0;
+            prices.Down = 0;
+
+            if(obUp) {
+                // best ask = lowest price someone is selling at
+                if(obUp.asks && obUp.asks.length > 0) {
+                    // asks come sorted high->low from API, we need lowest
+                    const sorted = [...obUp.asks].sort((a,b) => parseFloat(a.price) - parseFloat(b.price));
+                    prices.Up = parseFloat(sorted[0].price);
+                } else if(obUp.bids && obUp.bids.length > 0) {
+                    prices.Up = parseFloat(obUp.bids[0].price);
+                }
+                log(`UP book: asks=${obUp.asks?.length||0}, bids=${obUp.bids?.length||0}, price=${prices.Up}`);
+            }
+            if(obDown) {
+                if(obDown.asks && obDown.asks.length > 0) {
+                    const sorted = [...obDown.asks].sort((a,b) => parseFloat(a.price) - parseFloat(b.price));
+                    prices.Down = parseFloat(sorted[0].price);
+                } else if(obDown.bids && obDown.bids.length > 0) {
+                    prices.Down = parseFloat(obDown.bids[0].price);
+                }
+                log(`DOWN book: asks=${obDown.asks?.length||0}, bids=${obDown.bids?.length||0}, price=${prices.Down}`);
+            }
+
+        } else {
+            pill.className = 'pill waiting';
+            pill.textContent = 'Entre rondas...';
+            mq.textContent = 'Esperando el próximo mercado de 5 minutos...';
+            prices.Up = 0;
+            prices.Down = 0;
+            log('No se encontró mercado activo. Reintentando en 8s...');
+        }
+    } catch(e) {
+        pill.className = 'pill error';
+        pill.textContent = 'Error';
+        mq.textContent = 'Error de conexión';
+        log(`ERROR: ${e.message}`);
+    }
+
+    renderUI();
+    countdown = 8;
+}
+
+setInterval(() => {
+    countdown = Math.max(0, countdown - 1);
+    document.getElementById('timer').textContent = `Próxima actualización: ${countdown}s`;
+}, 1000);
+
+// Update investment return calculation on input change
+document.getElementById('amt').addEventListener('input', renderUI);
+
+// Start
+log('Bot iniciado. Buscando mercados...');
+renderUI();
+tick();
+setInterval(tick, 8000);
+</script>
+</body>
+</html>
