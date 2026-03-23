@@ -522,7 +522,7 @@ async function tick() {
             mq.textContent = 'Esperando el próximo mercado de 5 minutos...';
             prices.Up = 0;
             prices.Down = 0;
-            log('No se encontró mercado activo. Reintentando en 8s...');
+            log('No se encontró mercado activo. Reintentando en 1s...');
         }
     } catch(e) {
         pill.className = 'pill error';
@@ -532,7 +532,7 @@ async function tick() {
     }
 
     renderUI();
-    countdown = 8;
+    countdown = 1;
 }
 
 setInterval(() => {
@@ -547,7 +547,7 @@ document.getElementById('amt').addEventListener('input', renderUI);
 log('Bot iniciado. Buscando mercados...');
 renderUI();
 tick();
-setInterval(tick, 8000);
+setInterval(tick, 1000);
 </script>
 </body>
 </html>
