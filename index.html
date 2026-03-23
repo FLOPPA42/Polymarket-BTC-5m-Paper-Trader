@@ -475,7 +475,7 @@ async function tick() {
             pill.textContent = 'EN VIVO';
             mq.textContent = m.question;
 
-            // Parse tokens
+            // Parse tokens & outcomes
             const outs = JSON.parse(m.outcomes || '[]');
             const toks = JSON.parse(m.clobTokenIds || '[]');
             const upIdx = outs.indexOf('Up');
@@ -483,33 +483,38 @@ async function tick() {
             tokens.Up = toks[upIdx];
             tokens.Down = toks[downIdx];
 
-            // Fetch orderbooks
-            const obUp = await getBook(tokens.Up);
-            const obDown = await getBook(tokens.Down);
-
+            // 1) PRIMARY: Use outcomePrices from Gamma API (always available)
             prices.Up = 0;
             prices.Down = 0;
+            try {
+                const op = JSON.parse(m.outcomePrices || '[]');
+                if(op.length >= 2) {
+                    prices.Up = parseFloat(op[upIdx]) || 0;
+                    prices.Down = parseFloat(op[downIdx]) || 0;
+                    log(`Precios Gamma: UP=${prices.Up}, DOWN=${prices.Down}`);
+                }
+            } catch(e) {
+                log(`Error parseando outcomePrices: ${e.message}`);
+            }
 
-            if(obUp) {
-                // best ask = lowest price someone is selling at
-                if(obUp.asks && obUp.asks.length > 0) {
-                    // asks come sorted high->low from API, we need lowest
+            // 2) OPTIONAL: Try CLOB orderbook for more accurate spread prices
+            try {
+                const obUp = await getBook(tokens.Up);
+                if(obUp && obUp.asks && obUp.asks.length > 0) {
                     const sorted = [...obUp.asks].sort((a,b) => parseFloat(a.price) - parseFloat(b.price));
                     prices.Up = parseFloat(sorted[0].price);
-                } else if(obUp.bids && obUp.bids.length > 0) {
-                    prices.Up = parseFloat(obUp.bids[0].price);
+                    log(`UP CLOB ask: ${prices.Up}`);
                 }
-                log(`UP book: asks=${obUp.asks?.length||0}, bids=${obUp.bids?.length||0}, price=${prices.Up}`);
-            }
-            if(obDown) {
-                if(obDown.asks && obDown.asks.length > 0) {
+            } catch(e) { /* CLOB failed, use Gamma price */ }
+
+            try {
+                const obDown = await getBook(tokens.Down);
+                if(obDown && obDown.asks && obDown.asks.length > 0) {
                     const sorted = [...obDown.asks].sort((a,b) => parseFloat(a.price) - parseFloat(b.price));
                     prices.Down = parseFloat(sorted[0].price);
-                } else if(obDown.bids && obDown.bids.length > 0) {
-                    prices.Down = parseFloat(obDown.bids[0].price);
+                    log(`DOWN CLOB ask: ${prices.Down}`);
                 }
-                log(`DOWN book: asks=${obDown.asks?.length||0}, bids=${obDown.bids?.length||0}, price=${prices.Down}`);
-            }
+            } catch(e) { /* CLOB failed, use Gamma price */ }
 
         } else {
             pill.className = 'pill waiting';
