@@ -270,6 +270,7 @@
         <div class="status-bar">
             <div class="pill waiting" id="pill">Conectando...</div>
             <div class="timer" id="timer">--</div>
+            <div class="timer" id="market-timer" style="color:var(--accent); font-weight:700;">Cierra en: --:--</div>
         </div>
         <div class="market-q" id="mq">Buscando mercado activo...</div>
 
@@ -601,9 +602,26 @@ async function tick() {
         log(`ERROR: ${e.message}`);
     }
 
+
     renderUI();
     countdown = 1;
 }
+
+// Market Countdown Timer
+setInterval(() => {
+    const nowCtx = Math.floor(Date.now() / 1000);
+    const bucket = Math.floor(nowCtx / 300) * 300;
+    const end = bucket + 300;
+    const left = end - nowCtx;
+    
+    if (left >= 0) {
+        const m = Math.floor(left / 60);
+        const s = left % 60;
+        document.getElementById('market-timer').textContent = `Cierra en: ${m}:${s.toString().padStart(2, '0')}`;
+    } else {
+        document.getElementById('market-timer').textContent = `Cierra en: 0:00`;
+    }
+}, 1000);
 
 setInterval(() => {
     countdown = Math.max(0, countdown - 1);
@@ -711,24 +729,35 @@ function drawChart() {
         grad.addColorStop(1, 'rgba(255,59,105,0.15)');
     }
 
-    // Fill area
+    // Fill area with smooth curve
     ctx.beginPath();
     ctx.moveTo(xScale(0), H - marginB);
-    for(let i = 0; i < chartData.length; i++) {
-        ctx.lineTo(xScale(i), yScale(chartData[i].price));
+    ctx.lineTo(xScale(0), yScale(chartData[0].price));
+    
+    for(let i = 0; i < chartData.length - 1; i++) {
+        const x_mid = (xScale(i) + Math.min(xScale(i + 1), W)) / 2;
+        const y_mid = (yScale(chartData[i].price) + yScale(chartData[i + 1].price)) / 2;
+        const cp_x1 = (x_mid + xScale(i)) / 2;
+        const cp_x2 = (x_mid + xScale(i + 1)) / 2;
+        ctx.quadraticCurveTo(cp_x1, yScale(chartData[i].price), x_mid, y_mid);
+        ctx.quadraticCurveTo(cp_x2, yScale(chartData[i+1].price), xScale(i+1), yScale(chartData[i+1].price));
     }
+    
     ctx.lineTo(xScale(chartData.length - 1), H - marginB);
     ctx.closePath();
     ctx.fillStyle = grad;
     ctx.fill();
 
-    // Line
+    // Line with smooth curve
     ctx.beginPath();
-    for(let i = 0; i < chartData.length; i++) {
-        const x = xScale(i);
-        const y = yScale(chartData[i].price);
-        if(i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+    ctx.moveTo(xScale(0), yScale(chartData[0].price));
+    for(let i = 0; i < chartData.length - 1; i++) {
+        const x_mid = (xScale(i) + Math.min(xScale(i + 1), W)) / 2;
+        const y_mid = (yScale(chartData[i].price) + yScale(chartData[i + 1].price)) / 2;
+        const cp_x1 = (x_mid + xScale(i)) / 2;
+        const cp_x2 = (x_mid + xScale(i + 1)) / 2;
+        ctx.quadraticCurveTo(cp_x1, yScale(chartData[i].price), x_mid, y_mid);
+        ctx.quadraticCurveTo(cp_x2, yScale(chartData[i+1].price), xScale(i+1), yScale(chartData[i+1].price));
     }
     ctx.strokeStyle = lineColor;
     ctx.lineWidth = 2.5;
