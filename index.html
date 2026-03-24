@@ -282,13 +282,15 @@
             <div class="trade-side up-side">
                 <div class="side-label">📈 UP</div>
                 <div class="price-big" id="pUp">--</div>
-                <div class="potential">Retorno: <span id="rUp">--</span></div>
+                <div class="potential">Pago si ganas: <span id="rUp">--</span></div>
+                <div class="potential">Ganancia neta: <span id="gUp" style="color:var(--up)">--</span></div>
                 <button class="btn btn-up" id="bUp" disabled onclick="buy('Up')">COMPRAR UP</button>
             </div>
             <div class="trade-side down-side">
                 <div class="side-label">📉 DOWN</div>
                 <div class="price-big" id="pDown">--</div>
-                <div class="potential">Retorno: <span id="rDown">--</span></div>
+                <div class="potential">Pago si ganas: <span id="rDown">--</span></div>
+                <div class="potential">Ganancia neta: <span id="gDown" style="color:var(--down)">--</span></div>
                 <button class="btn btn-down" id="bDown" disabled onclick="buy('Down')">COMPRAR DOWN</button>
             </div>
         </div>
@@ -367,21 +369,29 @@ function renderUI() {
 
     // Prices
     if(prices.Up > 0) {
-        document.getElementById('pUp').textContent = prices.Up.toFixed(2);
-        document.getElementById('rUp').textContent = '$' + (amt / prices.Up).toFixed(2);
+        document.getElementById('pUp').textContent = (prices.Up * 100).toFixed(1) + '¢';
+        const payout = amt / prices.Up;
+        const profit = payout - amt;
+        document.getElementById('rUp').textContent = '$' + payout.toFixed(2);
+        document.getElementById('gUp').textContent = '+$' + profit.toFixed(2) + ' (' + ((1/prices.Up - 1) * 100).toFixed(0) + '%)';
         document.getElementById('bUp').disabled = false;
     } else {
         document.getElementById('pUp').textContent = '--';
         document.getElementById('rUp').textContent = '--';
+        document.getElementById('gUp').textContent = '--';
         document.getElementById('bUp').disabled = true;
     }
     if(prices.Down > 0) {
-        document.getElementById('pDown').textContent = prices.Down.toFixed(2);
-        document.getElementById('rDown').textContent = '$' + (amt / prices.Down).toFixed(2);
+        document.getElementById('pDown').textContent = (prices.Down * 100).toFixed(1) + '¢';
+        const payout = amt / prices.Down;
+        const profit = payout - amt;
+        document.getElementById('rDown').textContent = '$' + payout.toFixed(2);
+        document.getElementById('gDown').textContent = '+$' + profit.toFixed(2) + ' (' + ((1/prices.Down - 1) * 100).toFixed(0) + '%)';
         document.getElementById('bDown').disabled = false;
     } else {
         document.getElementById('pDown').textContent = '--';
         document.getElementById('rDown').textContent = '--';
+        document.getElementById('gDown').textContent = '--';
         document.getElementById('bDown').disabled = true;
     }
 
